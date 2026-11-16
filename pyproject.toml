@@ -1,0 +1,30 @@
+[project]
+name = "animal-re-id"
+version = "0.1.0"
+description = "A reproducible framework for animal re-identification, supporting model training, evaluation, and video-based extensions."
+authors = [
+    { name = "JUNU", email = "m.l02n23@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "timm>=1.0.31",
+    "torch>=2.11.0",
+    "torchvision>=0.26.0",
+    "wildlife-datasets>=1.0.9",
+    "wildlife-tools>=0.0.9",
+]
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu128" }
+
+[project.scripts]
+animal-re-id = "animal_re_id:main"
+
+[build-system]
+requires = ["uv_build>=0.12.3,<0.13.0"]
+build-backend = "uv_build"
