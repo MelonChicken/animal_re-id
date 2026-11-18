@@ -1,0 +1,69 @@
+# Frozen DINOv2-S video baseline on PolarBearVidID.
+#
+# Primary protocol is the RoVF paper protocol: the official 70/10/20 tracklet
+# split and the published 100-row positive-pair file (both pair members used as
+# a query in turn, so 200 trials), Euclidean distance, Top-1 / Top-3. The
+# closed-set block adds Rank-1/Rank-3/mAP on the same split and is reported
+# separately because RoVF does not define those metrics.
+#
+# `spatial_reductions` are all extracted in one pass:
+#   patches -> mean of the 256 patch tokens (DINOv2-correct, the primary read)
+#   all     -> mean of CLS + patches (RoVF forward_strat="average")
+#   cls     -> CLS token only (RoVF forward_strat="cls")
+# See docs/benchmark_protocols.md for why the paper text and its code differ.
+
+experiment: dinov2_s_mean_video
+
+dataset:
+  name: PolarBearVidID
+  # Directory that directly contains animal_db.csv, track_info.csv,
+  # track_fold_info_1..5.csv and the numbered identity folders.
+  root: data/raw/PolarBearVidID
+  # Clips are built with np.linspace(0, n_frames - 1, 20, dtype=int).
+  frames_per_sequence: 20
+
+protocol:
+  # rovf_split -> the paper's 70/10/20 tracklet split (primary for this module)
+  # five_fold  -> official image-level fold files, reused for sequence retrieval
+  name: rovf_split
+  n_folds: 5
+  seed: 0
+  # Cumulative boundaries: first 70% of each identity's tracklets are train,
+  # the next 10% (0.7-0.8) validation, and the remaining 20% test.
+  train_ratio: 0.7
+  val_ratio: 0.8
+
+model:
+  name: facebook/dinov2-small
+  device: cuda
+  # 32 x 3 x 224 x 224 fits comfortably in 8 GB for ViT-S.
+  batch_size: 32
+  num_workers: 0
+  # Cold extraction runs in chunks so long runs log progress; a full pass is
+  # 28,620 frames = 6 chunks at this size.
+  progress_chunk: 5000
+  image_size: 224
+  # imagenet -> DINOv2's own mean/std normalization
+  # rovf     -> /255 only, as in AnimalClipDataset.load_clip
+  preprocessing: imagenet
+  spatial_reductions: [patches, all, cls]
+
+evaluation:
+  # Frames averaged per sequence; 5 and 10 are the paper's grid.
+  frame_counts: [5, 10, 20]
+  primary:
+    spatial_reduction: patches
+    frame_count: 20
+  # fold -> query and gallery are the held-out split
+  # all  -> query is the held-out split, gallery is every sequence
+  gallery_scope: fold
+  distance: euclidean
+  # Official RoVF query/gallery list (100 rows, both positives used as a query,
+  # so 200 trials). Clip ids are mapped to sequence keys before scoring.
+  pair_file: data/raw/rovf/Precomputed_test_examples_polarbear.csv
+  stream_log: true
+
+paths:
+  cache_dir: experiments/cache
+  split_dir: experiments/splits
+  result_dir: experiments/results
