@@ -1,0 +1,43 @@
+# Frozen MegaDescriptor baseline on PolarBearVidID.
+#
+# Protocol `five_fold` is the *official* image-level protocol of Zuerl et al.
+# (2023): the archive ships track_fold_info_1..5.csv, which this project reads
+# verbatim. See docs/benchmark_protocols.md before changing anything here.
+
+experiment: megadescriptor_frozen_polarbear_5fold
+
+dataset:
+  name: PolarBearVidID
+  # Directory that directly contains animal_db.csv, track_info.csv,
+  # track_fold_info_1..5.csv and the numbered identity folders.
+  root: data/raw/PolarBearVidID
+  # "middle": one frame per sequence, closest to the sequence midpoint.
+  frame_selection: middle
+
+protocol:
+  # five_fold             -> official fold files (primary)
+  # five_fold_stratified  -> custom seeded redraw, ablation only
+  # rovf_split            -> official RoVF 70/10/20 tracklet split
+  name: five_fold
+  n_folds: 5
+  seed: 0          # only used by five_fold_stratified
+  train_ratio: 0.7 # only used by rovf_split
+  val_ratio: 0.8   # only used by rovf_split
+
+model:
+  name: hf-hub:BVRA/MegaDescriptor-L-384
+  # 32 x 384x384 fits in 8 GB; lower it if the device runs out of memory.
+  batch_size: 32
+  num_workers: 0
+  device: cuda
+
+evaluation:
+  metrics: [rank1, rank3, mAP]
+  # fold -> query and gallery are the held-out fold (primary)
+  # all  -> query is the held-out fold, gallery is every sequence
+  gallery_scope: fold
+
+paths:
+  cache_dir: experiments/cache
+  split_dir: experiments/splits
+  result_dir: experiments/results
