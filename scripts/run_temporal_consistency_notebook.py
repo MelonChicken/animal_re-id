@@ -26,7 +26,11 @@ def main() -> None:
             stream.reconfigure(encoding="utf-8", errors="backslashreplace")
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--notebook", default="notebooks/temporal_consistency_pilot.ipynb")
+    parser.add_argument("--identity-count", type=int, help="Seeded subset of identities (default: all)")
+    parser.add_argument("--all-test-clips", action="store_true", help="Use every Test clip of the selected identities")
     args = parser.parse_args()
+    if args.identity_count is not None and args.identity_count < 1:
+        parser.error("--identity-count must be positive")
     root = Path(__file__).resolve().parents[1]
     source = root / args.notebook
     notebook = json.loads(source.read_text(encoding="utf-8"))
@@ -34,7 +38,12 @@ def main() -> None:
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
-    namespace = {"__name__": "__main__", "PILOT_ROOT": root}
+    overrides = {}
+    if args.identity_count is not None:
+        overrides["identity_count"] = args.identity_count
+    if args.all_test_clips:
+        overrides["clips_per_identity"] = None
+    namespace = {"__name__": "__main__", "PILOT_ROOT": root, "PILOT_OVERRIDES": overrides}
     target = None
     count = 0
     for cell in notebook["cells"]:
@@ -43,7 +52,13 @@ def main() -> None:
         count += 1
         cell["execution_count"] = count
         outputs = cell["outputs"] = []
-        stream = io.StringIO()
+        class Capture(io.StringIO):
+            def write(self, value):
+                sys.__stdout__.write(value)
+                sys.__stdout__.flush()
+                return super().write(value)
+
+        stream = Capture()
 
         def show(*_args, **_kwargs):
             for number in plt.get_fignums():
@@ -69,8 +84,6 @@ def main() -> None:
             target = namespace["RUN_DIR"] / source.name
         if target is not None:
             target.write_text(json.dumps(notebook, ensure_ascii=False, indent=1), encoding="utf-8")
-        if stream.getvalue():
-            print(stream.getvalue(), end="", flush=True)
         if failed:
             raise RuntimeError(f"Cell {count} failed: {outputs[-1].get('evalue')}; executed notebook: {target}")
     print(f"Executed notebook: {target}")
